@@ -49,6 +49,8 @@ import java.util.Set;
 public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
     interface TileListener {
+        boolean isPackageWhitelisted(String pkg);
+        boolean isParentalLocked();
         void onTileFocused(int position, View card);
 
         /** Called for a D-pad direction key on a tile. Return true when handled (focus stays put). */
@@ -469,6 +471,10 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
     /** Opens the tile's activity by explicit component, with no extras: a card can name nothing else. */
     private void launch(Entry e) {
+        if (listener.isParentalLocked()) {
+            Toast.makeText(ctx, "🔒 Khóa Trẻ Em Đang Bật! Chọn biểu tượng 🔒 ở góc trên để nhập PIN mở khóa.", Toast.LENGTH_LONG).show();
+            return;
+        }
         if (e.kind == Entry.HOME_SETTINGS) {
             ctx.startActivity(new Intent(ctx, HomeSettingsActivity.class)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));

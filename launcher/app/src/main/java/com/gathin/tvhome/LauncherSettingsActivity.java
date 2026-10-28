@@ -5,6 +5,8 @@ import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.view.View;
@@ -13,7 +15,10 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /** Remote-friendly settings owned by the launcher; system settings stay one row away. */
 public final class LauncherSettingsActivity extends Activity {
@@ -133,6 +138,10 @@ public final class LauncherSettingsActivity extends Activity {
             changed();
             refresh();
         });
+        View whitelistChoice = findViewById(R.id.whitelistChoice);
+        if (whitelistChoice != null) {
+            whitelistChoice.setOnClickListener(v -> showWhitelistPicker());
+        }
         findViewById(R.id.defaultHomeChoice).setOnClickListener(v -> {
             Toast.makeText(this, R.string.home_settings_help, Toast.LENGTH_LONG).show();
             open(new Intent(Settings.ACTION_HOME_SETTINGS));
@@ -148,6 +157,57 @@ public final class LauncherSettingsActivity extends Activity {
         LinearLayout row = (LinearLayout) views[0].getParent();
         row.removeAllViews();
         for (int i = views.length - 1; i >= 0; i--) row.addView(views[i]);
+    }
+
+    private void showWhitelistPicker() {
+        PackageManager pm = getPackageManager();
+        Intent intent = new Intent(Intent.ACTION_MAIN, null);
+        intent.addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER);
+        List<ResolveInfo> apps = pm.queryIntentActivities(intent, 0);
+
+        if (apps.isEmpty()) {
+            intent.removeCategory(Intent.CATEGORY_LEANBACK_LAUNCHER);
+            intent.addCategory(Intent.CATEGORY_LAUNCHER);
+            apps = pm.queryIntentActivities(intent, 0);
+        }
+
+        Set<String> currentWhitelist = choices.getStringSet("parental_lock_whitelist", null);
+        if (currentWhitelist == null) {
+            String[] defaults = getResources().getStringArray(R.array.default_parental_lock_whitelist);
+            currentWhitelist = new HashSet<>(Arrays.asList(defaults));
+        } else {
+            currentWhitelist = new HashSet<>(currentWhitelist);
+        }
+
+        final List<ResolveInfo> finalApps = apps;
+        final Set<String> updatedWhitelist = new HashSet<>(currentWhitelist);
+        CharSequence[] names = new CharSequence[apps.size()];
+        boolean[] checked = new boolean[apps.size()];
+
+        for (int i = 0; i < apps.size(); i++) {
+            ResolveInfo info = apps.get(i);
+            String pkg = info.activityInfo.packageName;
+            names[i] = info.loadLabel(pm);
+            checked[i] = updatedWhitelist.contains(pkg);
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.whitelist_settings_title)
+                .setMultiChoiceItems(names, checked, (dialog, which, isChecked) -> {
+                    String pkg = finalApps.get(which).activityInfo.packageName;
+                    if (isChecked) {
+                        updatedWhitelist.add(pkg);
+                    } else {
+                        updatedWhitelist.remove(pkg);
+                    }
+                })
+                .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                    choices.edit().putStringSet("parental_lock_whitelist", updatedWhitelist).apply();
+                    changed();
+                    Toast.makeText(this, "Đã lưu Whitelist ứng dụng thành công!", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
     }
 
     private void showWallpaperPicker() {

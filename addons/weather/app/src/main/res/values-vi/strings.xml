@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Thời tiết</string>
+
+    <string name="feels_like">Cảm giác %1$d°</string>
+    <string name="humidity">Độ ẩm %1$d%%</string>
+    <string name="wind">Gió %1$d km/h</string>
+    <string name="high_low">%1$d° / %2$d°</string>
+    <string name="aqi_line">Chất lượng không khí %1$d · %2$s</string>
+    <string name="updated">Cập nhật lúc %1$s · Open-Meteo</string>
+    <string name="change_city">Đổi thành phố</string>
+    <string name="auto_location">Tự động tìm vị trí</string>
+    <string name="loading">Đang tải thời tiết…</string>
+    <string name="offline">Không thể kết nối đến Open-Meteo. Kiểm tra kết nối mạng của TV; ứng dụng sẽ thử lại sau 5 phút.</string>
+
+    <string name="pick_title">Thành phố nào?</string>
+    <string name="pick_hint">Tên thành phố, v.d. Hà Nội</string>
+    <string name="pick_search">Tìm kiếm</string>
+    <string name="pick_none">Không tìm thấy thành phố \"%1$s\"</string>
+    <string name="pick_first">Chọn một thành phố để xem thời tiết.</string>
+
+    <string name="aqi_good">Tốt</string>
+    <string name="aqi_moderate">Trung bình</string>
+    <string name="aqi_sensitive">Kém</string>
+    <string name="aqi_unhealthy">Xấu</string>
+    <string name="aqi_very_unhealthy">Rất xấu</string>
+    <string name="aqi_hazardous">Nguy hại</string>
+
+    <string name="sky_clear">Quang mây</string>
+    <string name="sky_sunny">Trời nắng</string>
+    <string name="sky_mostly_clear">Trời trong</string>
+    <string name="sky_mostly_sunny">Nắng nhiều</string>
+    <string name="sky_partly_cloudy">Có mây</string>
+    <string name="sky_cloudy">Nhiều mây</string>
+    <string name="sky_fog">Sương mù</string>
+    <string name="sky_drizzle">Mưa phun</string>
+    <string name="sky_freezing_drizzle">Mưa buốt</string>
+    <string name="sky_light_rain">Mưa nhỏ</string>
+    <string name="sky_rain">Có mưa</string>
+    <string name="sky_heavy_rain">Mưa to</string>
+    <string name="sky_freezing_rain">Mưa băng</string>
+    <string name="sky_light_snow">Tuyết nhẹ</string>
+    <string name="sky_snow">Tuyết rơi</string>
+    <string name="sky_heavy_snow">Tuyết dày</string>
+    <string name="sky_snow_grains">Hạt tuyết</string>
+    <string name="sky_showers">Mưa rào</string>
+    <string name="sky_snow_showers">Mưa tuyết rào</string>
+    <string name="sky_thunderstorm">Mưa dông</string>
+
+    <string name="weather_alert_thunderstorm_in_hours">⚠️ Cảnh báo: Mưa dông sau %1$d giờ nữa</string>
+    <string name="weather_alert_rain_in_hours">🌧️ Dự báo: Có mưa sau %1$d giờ nữa</string>
+    <string name="weather_summary_thunderstorm">⚠️ Cảnh báo: Dự báo có mưa dông, sấm sét</string>
+    <string name="weather_summary_rain">🌧️ Dự báo: Có mưa rải rác trong ngày</string>
+    <string name="weather_summary_fog">🌫️ Cảnh báo: Sương mù, tầm nhìn giảm</string>
+    <string name="weather_summary_snow">❄️ Cảnh báo: Tuyết rơi</string>
+    <string name="weather_summary_sunny">☀️ Dự báo: Nắng đẹp, thời tiết hanh khô</string>
+    <string name="weather_summary_cloudy">⛅ Dự báo: Nhiều mây, thời tiết mát mẻ</string>
+    <string name="weather_summary_default">⛅ Dự báo: Thời tiết ổn định</string>
+</resources>

@@ -9,6 +9,7 @@
     <string name="aqi_line">Air quality %1$d · %2$s</string>
     <string name="updated">Updated %1$s · Open-Meteo</string>
     <string name="change_city">Change city</string>
+    <string name="auto_location">Auto-detect location</string>
     <string name="loading">Loading the weather…</string>
     <string name="offline">Can\'t reach Open-Meteo. Check the TV\'s internet connection; it tries again in 5 minutes.</string>
 
@@ -45,4 +46,14 @@
     <string name="sky_showers">Showers</string>
     <string name="sky_snow_showers">Snow showers</string>
     <string name="sky_thunderstorm">Thunderstorm</string>
+
+    <string name="weather_alert_thunderstorm_in_hours">⚠️ Warning: Thunderstorm expected in %1$d hours</string>
+    <string name="weather_alert_rain_in_hours">🌧️ Forecast: Rain expected in %1$d hours</string>
+    <string name="weather_summary_thunderstorm">⚠️ Warning: Thunderstorms expected today</string>
+    <string name="weather_summary_rain">🌧️ Forecast: Scattered rain expected today</string>
+    <string name="weather_summary_fog">🌫️ Warning: Fog, reduced visibility</string>
+    <string name="weather_summary_snow">❄️ Warning: Snowfall expected</string>
+    <string name="weather_summary_sunny">☀️ Forecast: Clear and sunny weather</string>
+    <string name="weather_summary_cloudy">⛅ Forecast: Cloudy, pleasant weather</string>
+    <string name="weather_summary_default">⛅ Forecast: Stable weather conditions</string>
 </resources>

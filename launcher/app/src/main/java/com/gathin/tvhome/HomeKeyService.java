@@ -8,6 +8,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.media.AudioManager;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
@@ -40,6 +41,36 @@ import java.util.Set;
  */
 public class HomeKeyService extends AccessibilityService {
 
+    private static HomeKeyService instance;
+
+    public static HomeKeyService getInstance() {
+        return instance;
+    }
+
+    public void forceGoHomeAndLock() {
+        // 1. Send Media PAUSE & STOP to kill YouTube / Spotify playback
+        try {
+            AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+            if (am != null) {
+                long now = SystemClock.uptimeMillis();
+                am.dispatchMediaKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PAUSE, 0));
+                am.dispatchMediaKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PAUSE, 0));
+                am.dispatchMediaKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_STOP, 0));
+                am.dispatchMediaKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_STOP, 0));
+            }
+        } catch (Exception ignored) {}
+
+        // 2. Perform Global HOME action via Accessibility Service (Forces TV to kick out any foreground app)
+        performGlobalAction(GLOBAL_ACTION_HOME);
+
+        // 3. Re-launch MainActivity in Locked mode
+        Intent homeIntent = new Intent(this, MainActivity.class);
+        homeIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        try {
+            startActivity(homeIntent);
+        } catch (Exception ignored) {}
+    }
+
     /** restore_key_services was on when the config was read: this helper is noted for ServiceRepair. */
     private boolean repairRecord;
     /** Remote buttons that should open Settings (config.xml, settings_key_scancodes and settings_key_keycodes). */
@@ -62,6 +93,7 @@ public class HomeKeyService extends AccessibilityService {
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
+        instance = this;
         settingsScancodes = getResources().getIntArray(R.array.settings_key_scancodes);
         // The service is directBootAware: Android 11 skips a service that is not while the user is still
         // locked at boot, writes accessibility_enabled=0 and, on TCL G03 firmware, never binds it after the
@@ -141,11 +173,32 @@ public class HomeKeyService extends AccessibilityService {
         return false;
     }
 
+    private boolean isInputKey(KeyEvent event) {
+        int code = event.getKeyCode();
+        return code == KeyEvent.KEYCODE_TV_INPUT // 178
+                || code == KeyEvent.KEYCODE_AVR_INPUT // 182
+                || code == KeyEvent.KEYCODE_MEDIA_TOP_MENU // 226
+                || code == 259 // KEYCODE_TV_MEDIA_CONTEXT_MENU
+                || code == 227; // KEYCODE_TV_ANTENNA_CABLE
+    }
+
     @Override
     protected boolean onKeyEvent(KeyEvent event) {
         // A scancode entry is more specific than any keycode, so it goes first.
         if (RemoteKeys.handle(this, event, appScancodes.get(event.getScanCode()),
                 holdAppScancodes.get(event.getScanCode()))) return true;
+        // Intercept TV Input button on remote and show Launcher's custom TV inputs menu
+        if (isInputKey(event)) {
+            if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
+                Intent open = new Intent(this, MainActivity.class)
+                        .setAction(MainActivity.ACTION_VIEW_INPUTS)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                try {
+                    startActivity(open);
+                } catch (Exception ignored) {}
+            }
+            return true;
+        }
         // The stock launcher handled the remote's Settings button; with it disabled the button does nothing.
         if (isSettingsKey(event)) {
             if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {

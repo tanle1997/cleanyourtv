@@ -11,10 +11,10 @@
     <string name="live_tv">Truyền hình</string>
     <string name="no_inputs">Không tìm thấy nguồn vào</string>
     <!-- Vietnamese greets the same way at any hour. -->
-    <string name="good_morning">Xin chào</string>
-    <string name="good_afternoon">Xin chào</string>
-    <string name="good_evening">Xin chào</string>
-    <string name="good_night">Xin chào</string>
+    <string name="good_morning">Chào buổi sáng</string>
+    <string name="good_afternoon">Chào buổi chiều</string>
+    <string name="good_evening">Chào buổi tối</string>
+    <string name="good_night">Chúc ngủ ngon</string>
     <string name="ethernet">Ethernet</string>
     <string name="offline">Mất mạng</string>
     <string name="not_available">TV này không hỗ trợ</string>
@@ -116,4 +116,35 @@
     <string name="race_countdown_days">%1$d ngày %2$d giờ</string>
     <string name="last_opened">Mở lần cuối %1$s</string>
     <string name="tile_move">Di chuyển</string>
+
+    <string name="timer_lock_title">Hẹn Giờ &amp; Khóa Trẻ Em</string>
+    <string name="timer_lock_option_timer">1. Hẹn giờ tắt TV (Sleep Timer)</string>
+    <string name="timer_lock_option_lock">2. Bật Khóa trẻ em (Lock Mode)</string>
+    <string name="timer_lock_select_time">Chọn Thời Gian Tắt TV</string>
+    <string name="timer_lock_off">Tắt hẹn giờ (Off)</string>
+    <string name="timer_lock_15m">15 phút</string>
+    <string name="timer_lock_30m">30 phút</string>
+    <string name="timer_lock_45m">45 phút</string>
+    <string name="timer_lock_60m">60 phút</string>
+    <string name="timer_lock_90m">90 phút</string>
+    <string name="timer_lock_120m">120 phút</string>
+    <string name="timer_lock_canceled">Đã hủy hẹn giờ tắt TV</string>
+    <string name="timer_lock_scheduled">Đã hẹn giờ tắt TV sau %1$d phút</string>
+    <string name="parental_lock_enabled_toast">🔒 Đã BẬT Khóa Trẻ Em! Màn hình chính đã bị khóa.</string>
+    <string name="parental_lock_blocked_toast">🔒 Khóa Trẻ Em Đang Bật! Hãy bấm nút 🔒 ở góc trên để nhập PIN mở khóa.</string>
+    <string name="parental_lock_title_enter_pin">Nhập Mã PIN 6 Số Mở Khóa</string>
+    <string name="parental_lock_unlocked_toast">🔓 Mở khóa thành công!</string>
+    <string name="parental_lock_incorrect_pin">Mật khẩu KHÔNG ĐÚNG!</string>
+    <string name="btn_cancel">Hủy</string>
+    <string name="btn_confirm">Xác Nhận</string>
+
+    <string name="timer_lock_option_usage">3. Hẹn giờ giới hạn thời gian xem TV</string>
+    <string name="timer_lock_usage_title">Chọn Thời Gian Cho Phép Xem TV</string>
+    <string name="timer_lock_usage_set">Đã hẹn giới hạn xem TV %1$d phút. Tự động khóa khi hết giờ.</string>
+    <string name="timer_lock_usage_canceled">Đã hủy giới hạn thời gian xem TV.</string>
+
+    <string name="whitelist_settings_title">Ứng dụng cho phép khi Khóa (Whitelist)</string>
+    <string name="whitelist_settings_summary">Chọn các ứng dụng trẻ được phép mở ngay cả khi Khóa Trẻ Em đang BẬT.</string>
+    <string name="no_weather_data">Không có dữ liệu thời tiết</string>
+    <string name="loading">Đang tải…</string>
 </resources>

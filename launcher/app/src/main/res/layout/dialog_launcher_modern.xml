@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@color/dialog_bg"
+    android:padding="@dimen/dialog_padding">
+
+    <TextView
+        android:id="@+id/dialogTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="@color/dialog_title"
+        android:textSize="@dimen/dialog_title_size"
+        android:fontFamily="sans-serif-medium" />
+
+    <TextView
+        android:id="@+id/dialogSubtitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:textColor="@color/dialog_subtitle"
+        android:textSize="13sp"
+        android:visibility="gone" />
+
+    <EditText
+        android:id="@+id/dialogInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:textColor="@color/dialog_text_white"
+        android:textSize="18sp"
+        android:singleLine="true"
+        android:inputType="numberPassword"
+        android:background="@drawable/edittext_tv_selector"
+        android:padding="12dp"
+        android:focusable="true"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/optionsContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:orientation="vertical"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/buttonRow"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:orientation="horizontal"
+        android:gravity="end"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/btnCancel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/btn_cancel"
+            android:textColor="@color/launcher_btn_text"
+            android:background="@drawable/launcher_btn_selector"
+            android:paddingStart="@dimen/dialog_item_padding_h"
+            android:paddingEnd="@dimen/dialog_item_padding_h"
+            android:paddingTop="@dimen/dialog_item_padding_v"
+            android:paddingBottom="@dimen/dialog_item_padding_v"
+            android:textSize="@dimen/dialog_item_text_size"
+            android:fontFamily="sans-serif-medium"
+            android:focusable="true"
+            android:clickable="true" />
+
+        <TextView
+            android:id="@+id/btnConfirm"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:text="@string/btn_confirm"
+            android:textColor="@color/launcher_btn_text"
+            android:background="@drawable/launcher_btn_selector"
+            android:paddingStart="@dimen/dialog_item_padding_h"
+            android:paddingEnd="@dimen/dialog_item_padding_h"
+            android:paddingTop="@dimen/dialog_item_padding_v"
+            android:paddingBottom="@dimen/dialog_item_padding_v"
+            android:textSize="@dimen/dialog_item_text_size"
+            android:fontFamily="sans-serif-medium"
+            android:focusable="true"
+            android:clickable="true" />
+    </LinearLayout>
+</LinearLayout>

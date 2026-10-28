@@ -145,4 +145,45 @@
     <!-- Cinematic top shelf (cinematic_home): the line under the focused dock app's name; %1$s is when it was
          last opened, e.g. "5 minutes ago" or "yesterday, 9:40 pm". -->
     <string name="last_opened">Last opened %1$s</string>
+
+    <string name="timer_lock_title">Timer &amp; Parental Lock</string>
+    <string name="timer_lock_option_timer">1. Sleep Timer</string>
+    <string name="timer_lock_option_lock">2. Enable Parental Lock</string>
+    <string name="timer_lock_select_time">Select Sleep Duration</string>
+    <string name="timer_lock_off">Timer Off</string>
+    <string name="timer_lock_15m">15 minutes</string>
+    <string name="timer_lock_30m">30 minutes</string>
+    <string name="timer_lock_45m">45 minutes</string>
+    <string name="timer_lock_60m">60 minutes</string>
+    <string name="timer_lock_90m">90 minutes</string>
+    <string name="timer_lock_120m">120 minutes</string>
+    <string name="timer_lock_canceled">Sleep timer canceled</string>
+    <string name="timer_lock_scheduled">Sleep timer set for %1$d minutes</string>
+    <string name="parental_lock_enabled_toast">🔒 Parental Lock is ON! Main screen is locked.</string>
+    <string name="parental_lock_blocked_toast">🔒 Parental Lock is ON! Tap 🔒 at top to enter PIN.</string>
+    <string name="parental_lock_title_enter_pin">Enter 6-Digit PIN</string>
+    <string name="parental_lock_unlocked_toast">🔓 Unlocked successfully!</string>
+    <string name="parental_lock_incorrect_pin">Incorrect PIN!</string>
+    <string name="btn_cancel">Cancel</string>
+    <string name="btn_confirm">Confirm</string>
+
+    <string name="timer_lock_option_usage">3. Set TV Screen Time Limit for Kids</string>
+    <string name="timer_lock_usage_title">Select Max TV Screen Time</string>
+    <string name="timer_lock_usage_set">TV screen time set to %1$d minutes. Auto-locks when expired.</string>
+    <string name="timer_lock_usage_canceled">Canceled TV screen time limit.</string>
+
+    <string-array name="timer_options_labels">
+        <item>@string/timer_lock_off</item>
+        <item>@string/timer_lock_15m</item>
+        <item>@string/timer_lock_30m</item>
+        <item>@string/timer_lock_45m</item>
+        <item>@string/timer_lock_60m</item>
+        <item>@string/timer_lock_90m</item>
+        <item>@string/timer_lock_120m</item>
+    </string-array>
+
+    <string name="whitelist_settings_title">Allowed Apps in Lock Mode (Whitelist)</string>
+    <string name="whitelist_settings_summary">Choose which apps kids can open even when Parental Lock is ON.</string>
+    <string name="no_weather_data">No weather data</string>
+    <string name="loading">Loading…</string>
 </resources>

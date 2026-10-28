@@ -3,6 +3,7 @@ package com.gathin.tvhome;
 import android.animation.ArgbEvaluator;
 import android.animation.ValueAnimator;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
@@ -29,6 +30,7 @@ import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.media.AudioManager;
 import android.media.tv.TvContract;
 import android.media.tv.TvInputInfo;
 import android.media.tv.TvInputManager;
@@ -45,9 +47,13 @@ import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.os.SystemClock;
 import android.provider.Settings;
+import android.text.Editable;
+import android.text.InputType;
 import android.text.SpannableString;
+import android.text.TextWatcher;
 import android.text.Spanned;
 import android.text.TextPaint;
 import android.text.TextUtils;
@@ -56,12 +62,14 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
+import android.view.inputmethod.EditorInfo;
 import android.view.SoundEffectConstants;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.view.Window;
 import android.view.animation.AnimationUtils;
 import android.view.animation.LayoutAnimationController;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -82,6 +90,7 @@ import java.io.File;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.HashMap;
@@ -169,6 +178,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private boolean animations;
     private boolean advancedEffects;
     private TextView greeting;
+    private TextView lunarDateText;
+    private View weatherPanel;
+    private TextView weatherMainInfo;
+    private TextView weatherFeelsLike;
+    private TextView weatherSummary;
+    private TextView day1Text;
+    private TextView day2Text;
+    private TextView day3Text;
     private View clockBlock;
     private View btnInputs;
     /** config show_inputs_pill: false keeps the Inputs pill hidden even when the TV has inputs. */
@@ -202,10 +219,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private final Rect revealRect = new Rect();
     // Static so they survive the activity being destroyed while another app is open (low-memory TVs,
     // or Developer options → "Don't keep activities"); they only reset when the process dies.
+    private float density;
     private static int lastFocused = 0;
     /** App of the last focused tile, so focus follows it when the app list changes. */
     private static String lastFocusedKey;
-    private float density;
+    private final ParentalLockManager parentalLockManager = new ParentalLockManager();
+    private final StatsMonitorManager statsManager = new StatsMonitorManager();
+    private final TopBarManager topBarManager = new TopBarManager();
     /** Module cards (res/values/config.xml, module_cards): discovered on resume, shown only after the owner's Show. */
     private boolean moduleCards;
     /** config settings_key_keycodes / settings_key_panel, so the Settings button works on Home without HomeKeyService. */
@@ -317,6 +337,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private final BroadcastReceiver packageReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
+            // If Weather app was uninstalled, clear weather cache and hide panel immediately
+            if (Intent.ACTION_PACKAGE_REMOVED.equals(intent.getAction())) {
+                Uri data = intent.getData();
+                if (data != null && "io.github.sumyabazar1.weather".equals(data.getSchemeSpecificPart())) {
+                    WeatherCanvasManager.clearWeatherCache(MainActivity.this, weatherPanel);
+                }
+            }
             // Updates send REMOVED followed by ADDED; keep the tile until the new APK is ready.
             if (Intent.ACTION_PACKAGE_REMOVED.equals(intent.getAction())
                     && intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)) return;
@@ -328,12 +355,99 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     };
     // Right after boot the clock is often wrong until network time arrives; don't wait a minute to catch up.
     private final IntentFilter timeFilter = new IntentFilter(Intent.ACTION_TIME_CHANGED);
+
+    private final IntentFilter weatherFilter = WeatherCanvasManager.WEATHER_FILTER;
+    private BroadcastReceiver weatherReceiver;
     private final BroadcastReceiver timeReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             updateClockVisibility();
         }
     };
+
+    private final IntentFilter screenOnFilter = new IntentFilter(Intent.ACTION_SCREEN_ON);
+    private final BroadcastReceiver screenOnReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (Intent.ACTION_SCREEN_ON.equals(intent.getAction())) {
+                SharedPreferences prefs = getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE);
+                boolean locked = prefs.getBoolean("parental_lock_enabled", false);
+                long limitMin = prefs.getLong("parental_lock_limit_minutes", 0);
+                long usedSec = prefs.getLong("tv_used_seconds", 0);
+
+                if (locked || (limitMin > 0 && usedSec >= limitMin * 60)) {
+                    parentalLockManager.setParentalLockEnabled(MainActivity.this, true);
+
+                    try {
+                        AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+                        if (am != null) {
+                            long now = SystemClock.uptimeMillis();
+                            am.dispatchMediaKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PAUSE, 0));
+                            am.dispatchMediaKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PAUSE, 0));
+                            am.dispatchMediaKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_STOP, 0));
+                            am.dispatchMediaKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_STOP, 0));
+                        }
+                    } catch (Exception ignored) {}
+
+                    Intent homeIntent = new Intent(context, MainActivity.class);
+                    homeIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                    startActivity(homeIntent);
+
+                    updateLockIcon();
+                    showLockBlockedToast();
+                }
+            }
+        }
+    };
+
+    private boolean isWeatherAppInstalled() {
+        try {
+            getPackageManager().getPackageInfo("io.github.sumyabazar1.weather", 0);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private void clearWeatherCache() {
+        getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE)
+                .edit()
+                .remove("cache_weather_today")
+                .remove("cache_weather_feels")
+                .remove("cache_weather_summary")
+                .remove("cache_day1")
+                .remove("cache_day2")
+                .remove("cache_day3")
+                .apply();
+        if (weatherPanel != null) weatherPanel.setVisibility(View.GONE);
+    }
+
+    private void loadCachedWeather() {
+        if (!isWeatherAppInstalled()) {
+            clearWeatherCache();
+            return;
+        }
+        SharedPreferences prefs = getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE);
+        String mainInfo = prefs.getString("cache_weather_today", null);
+        if (mainInfo != null && !mainInfo.isEmpty()) {
+            if (weatherMainInfo != null) weatherMainInfo.setText(mainInfo);
+            String feels = prefs.getString("cache_weather_feels", null);
+            if (feels != null && weatherFeelsLike != null) weatherFeelsLike.setText(feels);
+            String summary = prefs.getString("cache_weather_summary", null);
+            if (summary != null && !summary.isEmpty() && weatherSummary != null) {
+                weatherSummary.setText(summary);
+                weatherSummary.setVisibility(View.VISIBLE);
+            }
+            String d1 = prefs.getString("cache_day1", null);
+            if (d1 != null && day1Text != null) day1Text.setText(d1);
+            String d2 = prefs.getString("cache_day2", null);
+            if (d2 != null && day2Text != null) day2Text.setText(d2);
+            String d3 = prefs.getString("cache_day3", null);
+            if (d3 != null && day3Text != null) day3Text.setText(d3);
+
+            if (weatherPanel != null) weatherPanel.setVisibility(View.VISIBLE);
+        }
+    }
     private final Runnable minuteTick = new Runnable() {
         @Override
         public void run() {
@@ -421,6 +535,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // still follows the dock.
         if (!cfg.dockTitle) hero.setVisibility(View.GONE);
         greeting = findViewById(R.id.greeting);
+        lunarDateText = findViewById(R.id.lunarDateText);
+        weatherPanel = findViewById(R.id.weatherPanel);
+        weatherMainInfo = findViewById(R.id.weatherMainInfo);
+        weatherFeelsLike = findViewById(R.id.weatherFeelsLike);
+        weatherSummary = findViewById(R.id.weatherSummary);
+        day1Text = findViewById(R.id.day1Text);
+        day2Text = findViewById(R.id.day2Text);
+        day3Text = findViewById(R.id.day3Text);
+        weatherReceiver = WeatherCanvasManager.createWeatherReceiver(
+                weatherMainInfo, weatherFeelsLike, weatherSummary, day1Text, day2Text, day3Text, weatherPanel);
         clockBlock = findViewById(R.id.leftBlock);
         greetingColor = greeting.getCurrentTextColor();
         if (getResources().getBoolean(R.bool.rtl_menu_bar)) {
@@ -591,24 +715,51 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
         btnInputs = findViewById(R.id.btnInputs);
         View btnSettings = findViewById(R.id.btnSettings);
-        btnInputs.setOnClickListener(v -> showInputs());
-        btnWifi.setOnClickListener(v -> openNetworkPill());
+        View btnTimerLock = findViewById(R.id.btnTimerLock);
+
+        if (btnTimerLock != null) {
+            parentalLockManager.init(this);
+            updateLockIcon();
+            btnTimerLock.setOnClickListener(v -> parentalLockManager.handleTimerLockClick(this));
+        }
+
+        TvInputSourceManager.applyViewInputsHandler(this, true);
+        topBarManager.setupTopButtons(this, btnInputs, btnWifi, btnTimerLock, btnSettings, launcherSettingsButton);
+
+        btnInputs.setOnClickListener(v -> {
+            if (parentalLockManager.isParentalLocked()) { showLockBlockedToast(); return; }
+            showInputs();
+        });
+        btnWifi.setOnClickListener(v -> {
+            if (parentalLockManager.isParentalLocked()) { showLockBlockedToast(); return; }
+            openNetworkPill();
+        });
         btnWifi.setOnLongClickListener(v -> {
+            if (parentalLockManager.isParentalLocked()) { showLockBlockedToast(); return true; }
             open(systemIntent(Settings.ACTION_WIFI_SETTINGS));
             return true;
         });
+        btnTimerLock = findViewById(R.id.btnTimerLock);
+        if (btnTimerLock != null) {
+            parentalLockManager.init(this);
+            updateLockIcon();
+            btnTimerLock.setOnClickListener(v -> parentalLockManager.handleTimerLockClick(this));
+        }
         launcherSettingsButton = cfg.launcherSettingsButton;
-        if (launcherSettingsButton) {
-            ((TextView) btnSettings).setText(R.string.launcher_settings);
+        if (launcherSettingsButton && btnSettings instanceof TextView) {
             ((TextView) btnSettings).setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_home_settings_pill, 0, 0, 0);
         }
         btnSettings.setOnClickListener(v -> {
+            if (parentalLockManager.isParentalLocked()) { showLockBlockedToast(); return; }
             if (launcherSettingsButton) startActivityForResult(
                     new Intent(this, LauncherSettingsActivity.class), LAUNCHER_SETTINGS_REQUEST);
             else open(systemIntent(Settings.ACTION_SETTINGS));
         });
         btnReorder = findViewById(R.id.btnReorder);
-        btnReorder.setOnClickListener(v -> toggleReorder());
+        btnReorder.setOnClickListener(v -> {
+            if (parentalLockManager.isParentalLocked()) { showLockBlockedToast(); return; }
+            toggleReorder();
+        });
         btnReorder.setVisibility(cfg.reorderButton ? View.VISIBLE : View.GONE);
         if (!cfg.showNetworkPill) btnWifi.setVisibility(View.GONE);
         showInputsPill = cfg.showInputsPill;
@@ -705,6 +856,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             registerReceiver(packageReceiver, packageFilter);
         }
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(weatherReceiver, weatherFilter, Context.RECEIVER_EXPORTED);
+            registerReceiver(screenOnReceiver, screenOnFilter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(weatherReceiver, weatherFilter);
+            registerReceiver(screenOnReceiver, screenOnFilter);
+        }
+
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
         TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);
         if (tim != null) tim.registerCallback(inputCallback, handler);
@@ -715,6 +874,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                     .removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
                     .build(), vpnCallback);
         }
+        applyViewInputsHandler(true);
+
         // Not after recreate(): the launch intent survives it and would open the settings again.
         if (savedInstanceState == null && !openLauncherSettingsIfAsked(getIntent())) openInputsIfAsked(getIntent());
     }
@@ -779,6 +940,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        updateLockIcon();
         if (openLauncherSettingsIfAsked(intent)) return;
         if (openInputsIfAsked(intent)) return;
         if (intent == null || !intent.hasCategory(Intent.CATEGORY_HOME)) return;
@@ -811,6 +973,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void onResume() {
         super.onResume();
+        updateLockIcon();
         // A festival that started or ended while Home was in the background: rebuild with or without it.
         if (festive != festival.active(LocalDate.now())) {
             recreate();
@@ -825,6 +988,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
         restartIdleClock();
         promptsPaused = false;
+        WeatherCanvasManager.loadCachedWeather(this, weatherMainInfo, weatherFeelsLike, weatherSummary, day1Text, day2Text, day3Text, weatherPanel);
+        statsManager.start(this, stats);
+        try { startService(new Intent(this, UsageTimerService.class)); } catch (Exception ignored) {}
         if (grid.getAdapter() == null) grid.setAdapter(adapter);   // dropped by onTrimMemory
         switch (tileRefresh.onResume(packagesChangedSinceRebuild())) {
             case REBUILD:
@@ -1086,6 +1252,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     protected void onDestroy() {
         super.onDestroy();
         unregisterReceiver(packageReceiver);
+        unregisterReceiver(weatherReceiver);
         wallpaperPlayer.close();
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
         TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);
@@ -1128,6 +1295,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      */
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_DOWN && isInputKey(event.getKeyCode())) {
+            showInputs();
+            return true;
+        }
         if (handleSettingsKey(event)) return true;
         if (tileMenuEnabled && !reordering && openPopup == null && cardPrompt == null
                 && event.getKeyCode() == KeyEvent.KEYCODE_MENU) {
@@ -1482,9 +1653,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         lastFocusedKey = adapter.keyAt(position);
         // Focus restored before the first layout (cold start): the tile has no size yet, and the glass
         // would be sized to 2*pad. Run again once the tile is laid out.
-        if (card.getWidth() == 0) {
+        if (card.getWidth() == 0 || card.isLayoutRequested() || grid.isLayoutRequested()) {
             card.post(() -> {
-                if (card.isFocused() && card.getWidth() > 0) onTileFocused(position, card);
+                if (card.isFocused() && card.getWidth() > 0 && !grid.isLayoutRequested()) onTileFocused(position, card);
             });
             return;
         }
@@ -2280,11 +2451,54 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             greeting.setText(festiveGreeting);
             greeting.setTextColor(liftTowardsWhite(festival.accentColor(), 0.25f));
         } else {
-            greeting.setText(greetingName.isEmpty() ? getString(res)
-                    : getString(R.string.greeting_with_name, getString(res), greetingName));
+            String baseGreeting = greetingName.isEmpty() ? getString(res)
+                    : getString(R.string.greeting_with_name, getString(res), greetingName);
+            greeting.setText(baseGreeting);
             greeting.setTextColor(greetingColor);
         }
+
+        if (lunarDateText != null) {
+            lunarDateText.setText(WeatherCanvasManager.getLunarDateString());
+        }
+
         if (shamsi) shamsiDate.setText(Shamsi.today(getResources()));
+    }
+
+    // Lightweight Vietnamese Lunar Calendar calculation (0 bytes RAM)
+    private String getLunarDateString() {
+        Calendar cal = Calendar.getInstance();
+        // Anchor date: 24 Oct 2026 Solar is 15 Sep 2026 Lunar (Bing Wu / Bính Ngọ)
+        Calendar base = Calendar.getInstance();
+        base.set(2026, Calendar.OCTOBER, 24);
+
+        long diffMillis = cal.getTimeInMillis() - base.getTimeInMillis();
+        long diffDays = diffMillis / (24 * 60 * 60 * 1000);
+
+        int lunarDay = (int) (15 + diffDays);
+        int lunarMonth = 9;
+
+        while (lunarDay > 30) {
+            lunarDay -= 30;
+            lunarMonth++;
+        }
+        while (lunarDay < 1) {
+            lunarDay += 30;
+            lunarMonth--;
+        }
+        if (lunarMonth > 12) lunarMonth -= 12;
+        if (lunarMonth < 1) lunarMonth += 12;
+
+        // Heavenly Stems and Earthly Branches (Can Chi) calculation for Lunar Year
+        String[] CAN = {"Giáp", "Ất", "Bính", "Đinh", "Mậu", "Kỷ", "Canh", "Tân", "Nhâm", "Quý"};
+        String[] CHI = {"Tý", "Sửu", "Dần", "Mão", "Thìn", "Tỵ", "Ngọ", "Mùi", "Thân", "Dậu", "Tuất", "Hợi"};
+        int year = cal.get(Calendar.YEAR);
+        int canIdx = (year - 4) % 10;
+        if (canIdx < 0) canIdx += 10;
+        int chiIdx = (year - 4) % 12;
+        if (chiIdx < 0) chiIdx += 12;
+        String canChiYear = CAN[canIdx] + " " + CHI[chiIdx];
+
+        return String.format(Locale.getDefault(), "%02d/%02d Âm lịch • %s", lunarDay, lunarMonth, canChiYear);
     }
 
     // ---- race-weekend panel (a theme's race_calendar) -----------------------------------------------
@@ -2361,7 +2575,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     }
 
     /** Shows the Wi-Fi network name on the button when we can read it, otherwise the connection type. */
-    private void updateWifiLabel() {
+    void updateWifiLabel() {
         String text = getString(R.string.wifi);
         boolean vpn = false, online = false;
         int icon = R.drawable.ic_wifi;
@@ -2434,7 +2648,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         } else if (!TextUtils.equals(btnWifi.getText(), text)) {
             btnWifi.setText(text);
         }
-        if (wifiIconOnly) {
+        if (wifiIconOnly || !topBarManager.isWifiFocused()) {
             btnWifi.setContentDescription(btnWifi.getText());
             btnWifi.setText(null);
         }
@@ -2547,22 +2761,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     /** Hides the Inputs pill when it would have nothing to list: streaming boxes have no HDMI-in, AV or tuner. */
     private void updateInputsButton() {
-        if (!showInputsPill) {
-            btnInputs.setVisibility(View.GONE);
-            return;
-        }
-        boolean any = liveTvIntent() != null || !sourcePanelService.isEmpty()
-                || (coocaaSources && !CoocaaSources.list(this).isEmpty());
-        TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);
-        if (!any && tim != null) {
-            for (TvInputInfo info : tim.getTvInputList()) {
-                // Inputs hidden in Settings > Inputs are left out of the menu, so they don't count here either.
-                if (info.isPassthroughInput() && !info.isHidden(this)) {
-                    any = true;
-                    break;
-                }
-            }
-        }
+        boolean any = TvInputSourceManager.hasAvailableInputs(this, showInputsPill, sourcePanelService, coocaaSources, liveTvIntent());
         btnInputs.setVisibility(any ? View.VISIBLE : View.GONE);
     }
 
@@ -3217,5 +3416,131 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             default:
                 return getString(R.string.card_state_new);
         }
+    }
+
+    @Override
+    public boolean isPackageWhitelisted(String pkg) {
+        return parentalLockManager.isPackageWhitelisted(this, pkg);
+    }
+
+    @Override
+    public boolean isParentalLocked() {
+        return parentalLockManager.isParentalLocked();
+    }
+
+    private final Handler sleepTimerHandler = new Handler(Looper.getMainLooper());
+    private Runnable sleepTimerRunnable;
+
+    public void showLockBlockedToast() {
+        parentalLockManager.showLockBlockedToast(this);
+    }
+
+    public void updateLockIcon() {
+        View btnTimerLock = findViewById(R.id.btnTimerLock);
+        if (btnTimerLock instanceof TextView) {
+            ((TextView) btnTimerLock).setCompoundDrawablesWithIntrinsicBounds(
+                    parentalLockManager.isParentalLocked() ? R.drawable.ic_lock_closed : R.drawable.ic_lock_open, 0, 0, 0);
+        }
+    }
+
+    private void handleTimerLockClick() {
+        parentalLockManager.handleTimerLockClick(this);
+    }
+
+    public void showSleepTimerDialog() {
+        View v = getLayoutInflater().inflate(R.layout.dialog_launcher_modern, null);
+        TextView title = v.findViewById(R.id.dialogTitle);
+        title.setText(R.string.timer_lock_select_time);
+        LinearLayout optionsContainer = v.findViewById(R.id.optionsContainer);
+        optionsContainer.setVisibility(View.VISIBLE);
+
+        AlertDialog dialog = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setView(v)
+                .create();
+
+        CharSequence[] times = getResources().getStringArray(R.array.timer_options_labels);
+        final int[] minutes = getResources().getIntArray(R.array.timer_minutes);
+
+        for (int i = 0; i < times.length; i++) {
+            final int index = i;
+            TextView item = new TextView(this);
+            item.setText(times[i]);
+            item.setTextColor(getResources().getColorStateList(R.color.launcher_btn_text, getTheme()));
+            item.setBackgroundResource(R.drawable.launcher_btn_selector);
+            int pad = Math.round(10 * getResources().getDisplayMetrics().density);
+            item.setPadding(pad * 2, pad, pad * 2, pad);
+            item.setTextSize(15);
+            item.setFocusable(true);
+            item.setClickable(true);
+
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            lp.setMargins(0, 0, 0, Math.round(6 * getResources().getDisplayMetrics().density));
+            item.setLayoutParams(lp);
+
+            item.setOnClickListener(v1 -> {
+                dialog.dismiss();
+                if (sleepTimerRunnable != null) {
+                    sleepTimerHandler.removeCallbacks(sleepTimerRunnable);
+                    sleepTimerRunnable = null;
+                }
+                if (index >= 0 && index < minutes.length) {
+                    int min = minutes[index];
+                    if (min == 0) {
+                        Toast.makeText(this, getString(R.string.timer_lock_canceled), Toast.LENGTH_SHORT).show();
+                    } else {
+                        long delayMs = min * 60 * 1000L;
+                        sleepTimerRunnable = this::executeTvSleep;
+                        sleepTimerHandler.postDelayed(sleepTimerRunnable, delayMs);
+                        Toast.makeText(this, getString(R.string.timer_lock_scheduled, min), Toast.LENGTH_LONG).show();
+                    }
+                }
+            });
+            optionsContainer.addView(item);
+        }
+
+        dialog.show();
+        if (optionsContainer.getChildCount() > 0) {
+            optionsContainer.getChildAt(0).requestFocus();
+        }
+    }
+
+    private void executeTvSleep() {
+        // 1. Force stop all active media playback (YouTube, Spotify, Zing MP3, etc.)
+        try {
+            AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+            if (am != null) {
+                long now = SystemClock.uptimeMillis();
+                am.dispatchMediaKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PAUSE, 0));
+                am.dispatchMediaKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PAUSE, 0));
+                am.dispatchMediaKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_STOP, 0));
+                am.dispatchMediaKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_STOP, 0));
+            }
+        } catch (Exception ignored) {}
+
+        // 2. Send hardware KEYCODE_SLEEP (223) & KEYCODE_POWER (26) via KeyEvent constants
+        new Thread(() -> {
+            try {
+                Runtime.getRuntime().exec("input keyevent " + KeyEvent.KEYCODE_SLEEP); // KeyCode 223: SLEEP
+            } catch (Exception ignored) {}
+            try {
+                Runtime.getRuntime().exec("input keyevent " + KeyEvent.KEYCODE_POWER); // KeyCode 26: POWER
+            } catch (Exception ignored) {}
+        }).start();
+
+        // 3. Fallback: Launch ClockActivity in sleep mode
+        try {
+            Intent clockIntent = new Intent(this, ClockActivity.class);
+            clockIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            startActivity(clockIntent);
+        } catch (Exception ignored) {}
+    }
+
+    private static boolean isInputKey(int keyCode) {
+        return keyCode == KeyEvent.KEYCODE_TV_INPUT // 178 (Standard Android TV Input key)
+                || keyCode == KeyEvent.KEYCODE_AVR_INPUT // 182
+                || keyCode == KeyEvent.KEYCODE_MEDIA_TOP_MENU // 226
+                || keyCode == 259 // KEYCODE_TV_MEDIA_CONTEXT_MENU
+                || keyCode == 227; // KEYCODE_TV_ANTENNA_CABLE
     }
 }

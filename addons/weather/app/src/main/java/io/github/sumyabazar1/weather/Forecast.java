@@ -16,6 +16,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
 import java.util.Locale;
 
@@ -64,8 +65,10 @@ final class Forecast {
         final int aqi;
         final int humidity;
         final int windKmh;
+        final int hoursUntilRain;
+        final boolean isStorm;
 
-        Report(int tempC, int feelsC, int code, boolean day, List<Day> days, int aqi, int humidity, int windKmh) {
+        Report(int tempC, int feelsC, int code, boolean day, List<Day> days, int aqi, int humidity, int windKmh, int hoursUntilRain, boolean isStorm) {
             this.tempC = tempC;
             this.feelsC = feelsC;
             this.code = code;
@@ -74,6 +77,8 @@ final class Forecast {
             this.aqi = aqi;
             this.humidity = humidity;
             this.windKmh = windKmh;
+            this.hoursUntilRain = hoursUntilRain;
+            this.isStorm = isStorm;
         }
     }
 
@@ -90,6 +95,94 @@ final class Forecast {
             this.maxC = maxC;
             this.minC = minC;
         }
+    }
+
+    /** Auto-detect city/ward and GPS coordinates based on IP/Wi-Fi network via HTTPS, with reverse geocoding in Vietnamese. */
+    static Place autoPlace() {
+        double lat = 0;
+        double lon = 0;
+        try {
+            JSONObject reply = get("https://ipapi.co/json/");
+            lat = reply.optDouble("latitude", 0);
+            lon = reply.optDouble("longitude", 0);
+        } catch (Exception ignored) { }
+
+        if (lat == 0 && lon == 0) {
+            try {
+                JSONObject reply = get("https://ipwho.is/");
+                if (reply.optBoolean("success")) {
+                    lat = reply.optDouble("latitude", 0);
+                    lon = reply.optDouble("longitude", 0);
+                }
+            } catch (Exception ignored) { }
+        }
+
+        if (lat == 0 || lon == 0) return null;
+
+        // 1. Try BigDataCloud Reverse Geocoding API (localityLanguage=vi) for Ward/District/City in Vietnamese
+        try {
+            String url = String.format(Locale.ROOT,
+                    "https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=%.4f&longitude=%.4f&localityLanguage=vi",
+                    lat, lon);
+            JSONObject reply = get(url);
+            String locality = reply.optString("locality", "").trim();
+            String city = reply.optString("city", "").trim();
+            String state = reply.optString("principalSubdivision", "").trim();
+
+            String displayName = "";
+            if (!locality.isEmpty() && !city.isEmpty() && !locality.equalsIgnoreCase(city)) {
+                displayName = locality + ", " + city;
+            } else if (!locality.isEmpty()) {
+                displayName = locality;
+            } else if (!city.isEmpty()) {
+                displayName = city;
+            } else if (!state.isEmpty()) {
+                displayName = state;
+            }
+
+            if (displayName.length() > 22 && displayName.contains(",")) {
+                displayName = displayName.split(",")[0].trim();
+            }
+
+            if (!displayName.isEmpty()) {
+                return new Place(displayName, state, lat, lon);
+            }
+        } catch (Exception ignored) { }
+
+        // 2. Try OpenStreetMap Nominatim Reverse Geocoding (accept-language=vi)
+        try {
+            String url = String.format(Locale.ROOT,
+                    "https://nominatim.openstreetmap.org/reverse?format=json&lat=%.4f&lon=%.4f&accept-language=vi",
+                    lat, lon);
+            JSONObject reply = get(url);
+            JSONObject addr = reply.optJSONObject("address");
+            if (addr != null) {
+                String quarter = addr.optString("quarter", addr.optString("suburb", addr.optString("neighbourhood", "")));
+                String city = addr.optString("city", addr.optString("town", addr.optString("village", "")));
+                String state = addr.optString("state", "");
+
+                String displayName = "";
+                if (!quarter.isEmpty() && !city.isEmpty() && !quarter.equalsIgnoreCase(city)) {
+                    displayName = quarter + ", " + city;
+                } else if (!quarter.isEmpty()) {
+                    displayName = quarter;
+                } else if (!city.isEmpty()) {
+                    displayName = city;
+                } else if (!state.isEmpty()) {
+                    displayName = state;
+                }
+
+                if (displayName.length() > 22 && displayName.contains(",")) {
+                    displayName = displayName.split(",")[0].trim();
+                }
+
+                if (!displayName.isEmpty()) {
+                    return new Place(displayName, state, lat, lon);
+                }
+            }
+        } catch (Exception ignored) { }
+
+        return new Place("Hà Nội", "Việt Nam", lat, lon);
     }
 
     /** Up to five places matching what was typed, best match first. Empty when nothing matches. */
@@ -124,16 +217,43 @@ final class Forecast {
         // and Google, had snow falling.
         JSONObject reply = get("https://api.open-meteo.com/v1/forecast?" + where + "&models=icon_seamless"
                 + "&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,is_day,wind_speed_10m"
+                + "&hourly=weather_code"
                 + "&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days="
                 + (forecastDays(days) + 1));
         JSONObject current = reply.getJSONObject("current");
         double temp = current.getDouble("temperature_2m");
         double humidity = current.getDouble("relative_humidity_2m");
         int code = snowIfCold(current.getInt("weather_code"), temp, humidity);
+
+        int hoursUntilRain = -1;
+        boolean isStorm = false;
+        JSONObject hourly = reply.optJSONObject("hourly");
+        if (hourly != null) {
+            JSONArray hourlyCodes = hourly.optJSONArray("weather_code");
+            if (hourlyCodes != null) {
+                int startHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
+                for (int i = 1; i <= 12; i++) {
+                    int index = startHour + i;
+                    if (index < hourlyCodes.length() && !hourlyCodes.isNull(index)) {
+                        int hCode = hourlyCodes.getInt(index);
+                        if (hCode >= 95) {
+                            hoursUntilRain = i;
+                            isStorm = true;
+                            break;
+                        } else if (hCode >= 51 && hCode <= 82 && hoursUntilRain == -1) {
+                            hoursUntilRain = i;
+                            isStorm = false;
+                        }
+                    }
+                }
+            }
+        }
+
         return new Report((int) Math.round(temp), (int) Math.round(current.getDouble("apparent_temperature")),
                 code, current.getInt("is_day") == 1,
                 days(reply.getJSONObject("daily")), aqiOrUnknown(where),
-                (int) Math.round(humidity), (int) Math.round(current.optDouble("wind_speed_10m", 0)));
+                (int) Math.round(humidity), (int) Math.round(current.optDouble("wind_speed_10m", 0)),
+                hoursUntilRain, isStorm);
     }
 
     /**

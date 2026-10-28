@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dialog UI Colors -->
+    <color name="dialog_bg">#F2141C2B</color>
+    <color name="dialog_title">#FFFFFFFF</color>
+    <color name="dialog_subtitle">#80FFFFFF</color>
+    <color name="dialog_input_bg_focused">#40FFFFFF</color>
+    <color name="dialog_input_bg_normal">#26FFFFFF</color>
+    <color name="dialog_input_border_focused">#FF6EC1FF</color>
+    <color name="dialog_input_border_normal">#4DFFFFFF</color>
+    <color name="dialog_text_white">#FFFFFFFF</color>
+    <color name="dialog_text_hint">#80FFFFFF</color>
+    <color name="dialog_text_focused">#FF000000</color>
+</resources>
